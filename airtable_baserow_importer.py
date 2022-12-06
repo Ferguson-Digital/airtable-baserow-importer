@@ -248,7 +248,11 @@ def do_import(field_map_fp: str, airtable_token: str, baserow_token:str, convers
             files[br_table_id] = {}
 
             # get the baserow fields data for the table, and convert it to a mapping of field ids to the data
-            br_fields_data_arr = requests.get(api_url + f"/database/fields/table/{br_table_id}/", headers={ "Authorization": "Token " + baserow_token }).json()
+            response = requests.get(api_url + f"/database/fields/table/{br_table_id}/", headers={ "Authorization": "Token " + baserow_token })
+            if response.status_code >= 400:
+                raise Exception("Error getting Baserow field data: " + response.text)
+
+            br_fields_data_arr = response.json()
             br_fields_data = {}
             for field_data in br_fields_data_arr:
                 br_fields_data[field_data["id"]] = field_data
@@ -270,9 +274,10 @@ def do_import(field_map_fp: str, airtable_token: str, baserow_token:str, convers
 
                 if len(create_records) > 0 and (len(create_records) > batch_size - 1 or record is None):
                     response = requests.post(api_url + f"/database/rows/table/{br_table_id}/batch/", headers={ "Authorization": "Token " + baserow_token }, json={ "items": create_records })
-                    create_records = []
                     if(response.status_code >= 400):
                         raise Exception("Error creating records: " + response.text)
+
+                    create_records = []
 
                     for i, item in enumerate(response.json()["items"]):
                         created_records[br_table_id].append(item["id"])
@@ -324,9 +329,10 @@ def do_import(field_map_fp: str, airtable_token: str, baserow_token:str, convers
 
                 if len(update_records) > 0 and (len(update_records) > batch_size - 1 or record_id is None):
                     response = requests.patch(api_url + f"/database/rows/table/{br_table_id}/batch/", headers={ "Authorization": "Token " + baserow_token }, json={ "items": update_records })
-                    update_records = []
                     if(response.status_code >= 400):
                         raise Exception("Error adding linked records: " + response.text)
+
+                    update_records = []
                 
                 if record_id is None:
                     break
@@ -343,7 +349,8 @@ def do_import(field_map_fp: str, airtable_token: str, baserow_token:str, convers
             for br_record_id, record_data in new_table_data.items():
                 for br_field_id, at_files in record_data.items():
                     for i, file_data in enumerate(at_files):
-                        response = requests.post(api_url + "/user-files/upload-via-url/", headers={ "Authorization": "Token " + baserow_token }, json={ "url": file_data["url"] })
+                        file_content = requests.get(file_data["url"]).content
+                        response = requests.post(api_url + "/user-files/upload-file/", headers={ "Authorization": "Token " + baserow_token }, files={ "file": (file_data["filename"], file_content, file_data["type"]) })
                         if(response.status_code >= 400):
                             raise Exception("Error uploading file: " + response.text)
 
@@ -370,9 +377,10 @@ def do_import(field_map_fp: str, airtable_token: str, baserow_token:str, convers
 
                 if len(update_records) > 0 and (len(update_records) > batch_size - 1 or record_id is None):
                     response = requests.patch(api_url + f"/database/rows/table/{br_table_id}/batch/", headers={ "Authorization": "Token " + baserow_token }, json={ "items": update_records })
-                    update_records = []
                     if(response.status_code >= 400):
                         raise Exception("Error adding files to records: " + response.text)
+
+                    update_records = []
                 
                 if record_id is None:
                     break
